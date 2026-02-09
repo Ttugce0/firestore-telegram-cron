@@ -1,0 +1,30 @@
+name: Daily Firestore Payment Check
+
+on:
+  schedule:
+    # Her gün Türkiye saatiyle 09:00 (UTC+3)
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-cron:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repo'yu çek
+        uses: actions/checkout@v4
+
+      - name: Node.js kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Paketleri yükle
+        run: npm install
+
+      - name: Firebase & Telegram cron çalıştır
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node checkPayments.js
