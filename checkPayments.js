@@ -8,23 +8,33 @@ const db = require("./firebase");
 async function telegramMesajGonder(mesaj) {
   const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
 
-  await axios.post(url, {
-    chat_id: process.env.TELEGRAM_CHAT_ID,
-    text: mesaj,
-    parse_mode: "HTML",
-  });
+  try {
+    await axios.post(url, {
+      chat_id: process.env.TELEGRAM_CHAT_ID,
+      text: mesaj,
+      parse_mode: "HTML",
+    });
+  } catch (err) {
+    console.error(
+      "Telegram gönderim hatası:",
+      err.response?.data || err.message
+    );
+  }
 }
 
 /* =========================
-   GÜN FARKI
+   GÜN FARKI HESAPLAMA
 ========================= */
 function gunFarkiHesapla(tarih) {
   const bugun = new Date();
   let hedef = null;
 
+  // Firestore Timestamp
   if (tarih && typeof tarih === "object" && tarih.toDate) {
     hedef = tarih.toDate();
-  } else if (typeof tarih === "string") {
+  }
+  // String tarih
+  else if (typeof tarih === "string") {
     if (/^\d{2}\.\d{2}\.\d{4}$/.test(tarih)) {
       const [g, a, y] = tarih.split(".");
       hedef = new Date(`${y}-${a}-${g}`);
@@ -50,6 +60,7 @@ async function otomatikOdemeKontrolu() {
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
+
     if (!data.sonOdemeTarihi || data.hatirlatmaAktif === false) continue;
 
     const gunFarki = gunFarkiHesapla(data.sonOdemeTarihi);
@@ -64,17 +75,17 @@ async function otomatikOdemeKontrolu() {
 
     const sonOdeme = data.sonOdemeTarihi;
 
-    // ❌ GECİKMİŞ
+    /* ❌ GECİKMİŞ ÖDEME */
     if (gunFarki < 0 && data.gecikmeBildirildi !== true) {
       await telegramMesajGonder(
         `❌ <b>ÖDEME GECİKMESİ</b>\n\n` +
-        `🏢 Firma: ${firmaAdi}\n` +
-        `📂 Kategori: ${kategori}\n` +
-        `💳 Toplam: ${toplamTutar} ₺\n` +
-        `💰 Ödenen: ${odenenTutar} ₺\n` +
-        `🧾 Kalan: ${kalanTutar} ₺\n` +
-        `📅 Son Ödeme: ${sonOdeme}\n` +
-        `⏱ Gecikme: ${Math.abs(gunFarki)} gün`
+        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
+        `📂 <b>Kategori:</b> ${kategori}\n` +
+        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
+        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
+        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
+        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
+        `⏱ <b>Gecikme:</b> ${Math.abs(gunFarki)} gün`
       );
 
       await doc.ref.update({
@@ -85,20 +96,20 @@ async function otomatikOdemeKontrolu() {
       bildirimSayisi++;
     }
 
-    // ⚠️ HATIRLATMA
+    /* ⚠️ HATIRLATMA */
     if (
       gunFarki === data.hatirlatmaGunOnce &&
       data.hatirlatmaGonderildi === false
     ) {
       await telegramMesajGonder(
         `⚠️ <b>ÖDEME HATIRLATMA</b>\n\n` +
-        `🏢 Firma: ${firmaAdi}\n` +
-        `📂 Kategori: ${kategori}\n` +
-        `💳 Toplam: ${toplamTutar} ₺\n` +
-        `💰 Ödenen: ${odenenTutar} ₺\n` +
-        `🧾 Kalan: ${kalanTutar} ₺\n` +
-        `📅 Son Ödeme: ${sonOdeme}\n` +
-        `⏳ Kalan Süre: ${gunFarki} gün`
+        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
+        `📂 <b>Kategori:</b> ${kategori}\n` +
+        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
+        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
+        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
+        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
+        `⏳ <b>Kalan Süre:</b> ${gunFarki} gün`
       );
 
       await doc.ref.update({
@@ -116,9 +127,11 @@ async function otomatikOdemeKontrolu() {
    ÇALIŞTIR
 ========================= */
 (async () => {
-  await otomatikOdemeKontrolu();
-  process.exit(0);
+  try {
+    await otomatikOdemeKontrolu();
+  } catch (err) {
+    console.error("Cron genel hata:", err);
+  } finally {
+    process.exit(0);
+  }
 })();
-
-
-
