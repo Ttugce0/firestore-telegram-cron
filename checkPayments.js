@@ -28,19 +28,14 @@ async function telegramMesajGonder(mesaj) {
 
 /* =========================
    GÜN FARKI (son ödeme)
-   negatif => gecikmiş
 ========================= */
 function gunFarkiHesapla(tarih) {
   const bugun = new Date();
   let hedef = null;
 
-  // Firestore Timestamp
   if (tarih && typeof tarih === "object" && tarih.toDate) {
     hedef = tarih.toDate();
-  }
-  // String tarih
-  else if (typeof tarih === "string") {
-    // TR format: 01.02.2026
+  } else if (typeof tarih === "string") {
     if (/^\d{2}\.\d{2}\.\d{4}$/.test(tarih)) {
       const [g, a, y] = tarih.split(".");
       hedef = new Date(`${y}-${a}-${g}`);
@@ -59,7 +54,6 @@ function gunFarkiHesapla(tarih) {
 
 /* =========================
    STRING TARİH FARKI
-   (gecikmeSonBildirimTarihi)
 ========================= */
 function gunFarkiStringTarih(tarihStr) {
   if (!tarihStr) return null;
@@ -80,8 +74,6 @@ function gunFarkiStringTarih(tarihStr) {
 
 /* =========================
    ANA CRON İŞİ
-   → GECİKMİŞLER İÇİN
-   → HAFTADA 1 MESAJ
 ========================= */
 async function otomatikOdemeKontrolu() {
   const snapshot = await db.collection("odemeler").get();
@@ -90,14 +82,11 @@ async function otomatikOdemeKontrolu() {
   for (const doc of snapshot.docs) {
     const data = doc.data();
 
-    // zorunlu kontroller
     if (!data.sonOdemeTarihi) continue;
     if (data.durum === "odendi") continue;
 
     const gunFarki = gunFarkiHesapla(data.sonOdemeTarihi);
-
-    // gecikmiş değilse geç
-    if (gunFarki === null || gunFarki >= 0) continue;
+    if (gunFarki === null) continue;
 
     const firmaAdi = data.firmaAdi || "Bilinmiyor";
     const kategori = data.kategori || data.aciklama || "Bilinmiyor";
@@ -108,42 +97,71 @@ async function otomatikOdemeKontrolu() {
 
     const sonOdeme = data.sonOdemeTarihi;
 
-    // son bildirimin üzerinden kaç gün geçmiş
-    const sonBildirimGun = gunFarkiStringTarih(
-      data.gecikmeSonBildirimTarihi
-    );
+    /* =========================
+       ⚠️ 3 GÜN KALA HATIRLATMA
+    ========================= */
+    if (
+      gunFarki === data.hatirlatmaGunOnce &&
+      data.hatirlatmaAktif === true &&
+      data.hatirlatmaGonderildi !== true
+    ) {
+      await telegramMesajGonder(
+        `⚠️ <b>ÖDEME HATIRLATMA</b>\n\n` +
+        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
+        `📂 <b>Kategori:</b> ${kategori}\n` +
+        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
+        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
+        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
+        `📅 <b>Son Ödeme Tarihi:</b> ${sonOdeme}\n` +
+        `⏳ <b>Kalan Süre:</b> ${gunFarki} gün`
+      );
 
-    // 🔁 HAFTADA 1 KURAL
-    const tekrarGonder =
-      data.gecikmeBildirildi !== true ||
-      sonBildirimGun === null ||
-      sonBildirimGun >= 7;
+      await doc.ref.update({
+        hatirlatmaGonderildi: true,
+      });
 
-    if (!tekrarGonder) continue;
+      bildirimSayisi++;
+      continue; // hatırlatmadan sonra gecikmeye bakma
+    }
 
-    // 📩 TELEGRAM
-    await telegramMesajGonder(
-      `❌ <b>GECİKMİŞ ÖDEME</b>\n\n` +
-      `🏢 <b>Firma:</b> ${firmaAdi}\n` +
-      `📂 <b>Kategori:</b> ${kategori}\n` +
-      `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
-      `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
-      `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
-      `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
-      `⏱ <b>Gecikme:</b> ${Math.abs(gunFarki)} gün`
-    );
+    /* =========================
+       ❌ GECİKMİŞ ÖDEME
+       (HAFTADA 1)
+    ========================= */
+    if (gunFarki < 0) {
+      const sonBildirimGun = gunFarkiStringTarih(
+        data.gecikmeSonBildirimTarihi
+      );
 
-    // 📝 FIRESTORE GÜNCELLE
-    await doc.ref.update({
-      gecikmeBildirildi: true,
-      gecikmeSonBildirimTarihi: new Date().toLocaleDateString("tr-TR"),
-    });
+      const tekrarGonder =
+        data.gecikmeBildirildi !== true ||
+        sonBildirimGun === null ||
+        sonBildirimGun >= 7;
 
-    bildirimSayisi++;
+      if (!tekrarGonder) continue;
+
+      await telegramMesajGonder(
+        `❌ <b>GECİKMİŞ ÖDEME</b>\n\n` +
+        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
+        `📂 <b>Kategori:</b> ${kategori}\n` +
+        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
+        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
+        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
+        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
+        `⏱ <b>Gecikme:</b> ${Math.abs(gunFarki)} gün`
+      );
+
+      await doc.ref.update({
+        gecikmeBildirildi: true,
+        gecikmeSonBildirimTarihi: new Date().toLocaleDateString("tr-TR"),
+      });
+
+      bildirimSayisi++;
+    }
   }
 
   console.log(
-    `GitHub Action → ${bildirimSayisi} gecikmiş ödeme bildirimi gönderildi`
+    `GitHub Action → ${bildirimSayisi} bildirim gönderildi`
   );
 }
 
