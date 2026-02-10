@@ -27,15 +27,18 @@ async function telegramMesajGonder(mesaj) {
 }
 
 /* =========================
-   GÜN FARKI (son ödeme)
+   GÜN FARKI (Timestamp / String)
 ========================= */
 function gunFarkiHesapla(tarih) {
   const bugun = new Date();
   let hedef = null;
 
+  // ✅ Firestore Timestamp
   if (tarih && typeof tarih === "object" && tarih.toDate) {
     hedef = tarih.toDate();
-  } else if (typeof tarih === "string") {
+  }
+  // ✅ String (GG.AA.YYYY veya ISO)
+  else if (typeof tarih === "string") {
     if (/^\d{2}\.\d{2}\.\d{4}$/.test(tarih)) {
       const [g, a, y] = tarih.split(".");
       hedef = new Date(`${y}-${a}-${g}`);
@@ -53,7 +56,8 @@ function gunFarkiHesapla(tarih) {
 }
 
 /* =========================
-   STRING TARİH FARKI
+   STRING TARİH → GÜN FARKI
+   (gecikme tekrar kontrolü)
 ========================= */
 function gunFarkiStringTarih(tarihStr) {
   if (!tarihStr) return null;
@@ -82,10 +86,14 @@ async function otomatikOdemeKontrolu() {
   for (const doc of snapshot.docs) {
     const data = doc.data();
 
-    if (!data.sonOdemeTarihi) continue;
+    // ❗️ YENİ SİSTEM: timestamp öncelikli
+    const sonOdemeRaw =
+      data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi;
+
+    if (!sonOdemeRaw) continue;
     if (data.durum === "odendi") continue;
 
-    const gunFarki = gunFarkiHesapla(data.sonOdemeTarihi);
+    const gunFarki = gunFarkiHesapla(sonOdemeRaw);
     if (gunFarki === null) continue;
 
     const firmaAdi = data.firmaAdi || "Bilinmiyor";
@@ -95,10 +103,18 @@ async function otomatikOdemeKontrolu() {
     const odenenTutar = Number(data.odenenTutar) || 0;
     const kalanTutar = Math.max(toplamTutar - odenenTutar, 0);
 
-    const sonOdeme = data.sonOdemeTarihi;
+    // 📅 Mesaj için tarih formatı
+    let sonOdeme = "-";
+    if (sonOdemeRaw.toDate) {
+      sonOdeme = sonOdemeRaw
+        .toDate()
+        .toLocaleDateString("tr-TR");
+    } else {
+      sonOdeme = sonOdemeRaw;
+    }
 
     /* =========================
-       ⚠️ 3 GÜN KALA HATIRLATMA
+       ⚠️ HATIRLATMA (X gün kala)
     ========================= */
     if (
       gunFarki === data.hatirlatmaGunOnce &&
@@ -106,13 +122,13 @@ async function otomatikOdemeKontrolu() {
       data.hatirlatmaGonderildi !== true
     ) {
       await telegramMesajGonder(
-        `⚠️ <b>ÖDEME HATIRLATMA</b>\n\n` +
+        `⚠️ <b>ÖDEME HATIRLATMASI</b>\n\n` +
         `🏢 <b>Firma:</b> ${firmaAdi}\n` +
         `📂 <b>Kategori:</b> ${kategori}\n` +
         `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
         `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
         `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
-        `📅 <b>Son Ödeme Tarihi:</b> ${sonOdeme}\n` +
+        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
         `⏳ <b>Kalan Süre:</b> ${gunFarki} gün`
       );
 
@@ -121,7 +137,7 @@ async function otomatikOdemeKontrolu() {
       });
 
       bildirimSayisi++;
-      continue; // hatırlatmadan sonra gecikmeye bakma
+      continue;
     }
 
     /* =========================
@@ -153,7 +169,8 @@ async function otomatikOdemeKontrolu() {
 
       await doc.ref.update({
         gecikmeBildirildi: true,
-        gecikmeSonBildirimTarihi: new Date().toLocaleDateString("tr-TR"),
+        gecikmeSonBildirimTarihi:
+          new Date().toLocaleDateString("tr-TR"),
       });
 
       bildirimSayisi++;
