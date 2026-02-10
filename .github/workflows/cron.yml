@@ -1,9 +1,9 @@
-name: Daily Firestore Payment Check (TEST 1 MIN)
+name: Daily Firestore Payment Check (07:00 TR)
 
 on:
   schedule:
-    # 🧪 TEST: her 1 dakikada bir
-    - cron: "* * * * *"
+    # ⏰ HER GÜN TÜRKİYE SAATİYLE 07:00
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # 🔥 KRİTİK: Türkiye saati
+      # 🇹🇷 Türkiye saati
       TZ: Europe/Istanbul
 
       TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
