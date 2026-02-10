@@ -3,6 +3,13 @@ const axios = require("axios");
 const db = require("./firebase");
 
 /* =========================
+   CRON BAŞLANGIÇ LOG
+========================= */
+console.log("🕒 CRON BASLADI");
+console.log("NOW (ISO):", new Date().toISOString());
+console.log("NOW (TR):", new Date().toLocaleString("tr-TR"));
+
+/* =========================
    TELEGRAM MESAJ
 ========================= */
 async function telegramMesajGonder(mesaj) {
@@ -33,12 +40,9 @@ function gunFarkiHesapla(tarih) {
   const bugun = new Date();
   let hedef = null;
 
-  // ✅ Firestore Timestamp
   if (tarih && typeof tarih === "object" && tarih.toDate) {
     hedef = tarih.toDate();
-  }
-  // ✅ String (GG.AA.YYYY veya ISO)
-  else if (typeof tarih === "string") {
+  } else if (typeof tarih === "string") {
     if (/^\d{2}\.\d{2}\.\d{4}$/.test(tarih)) {
       const [g, a, y] = tarih.split(".");
       hedef = new Date(`${y}-${a}-${g}`);
@@ -57,7 +61,6 @@ function gunFarkiHesapla(tarih) {
 
 /* =========================
    STRING TARİH → GÜN FARKI
-   (gecikme tekrar kontrolü)
 ========================= */
 function gunFarkiStringTarih(tarihStr) {
   if (!tarihStr) return null;
@@ -86,15 +89,45 @@ async function otomatikOdemeKontrolu() {
   for (const doc of snapshot.docs) {
     const data = doc.data();
 
-    // ❗️ YENİ SİSTEM: timestamp öncelikli
+    console.log("\n===============================");
+    console.log("📄 DOC ID:", doc.id);
+    console.log("🏢 Firma:", data.firmaAdi);
+    console.log(
+      "📅 Raw sonOdeme:",
+      data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi
+    );
+    console.log("🔔 hatirlatmaAktif:", data.hatirlatmaAktif);
+    console.log("🔕 hatirlatmaGonderildi:", data.hatirlatmaGonderildi);
+    console.log("⏳ hatirlatmaGunOnce:", data.hatirlatmaGunOnce);
+    console.log("💳 durum:", data.durum);
+
     const sonOdemeRaw =
       data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi;
 
-    if (!sonOdemeRaw) continue;
-    if (data.durum === "odendi") continue;
+    if (!sonOdemeRaw) {
+      console.log("⛔ sonOdemeRaw yok");
+      continue;
+    }
+
+    if (data.durum === "odendi") {
+      console.log("⛔ durum odendi");
+      continue;
+    }
 
     const gunFarki = gunFarkiHesapla(sonOdemeRaw);
-    if (gunFarki === null) continue;
+    console.log("📆 gunFarki (hesaplanan):", gunFarki);
+
+    if (sonOdemeRaw?.toDate) {
+      console.log(
+        "📆 sonOdeme ISO:",
+        sonOdemeRaw.toDate().toISOString()
+      );
+    }
+
+    if (gunFarki === null) {
+      console.log("⛔ gunFarki null");
+      continue;
+    }
 
     const firmaAdi = data.firmaAdi || "Bilinmiyor";
     const kategori = data.kategori || data.aciklama || "Bilinmiyor";
@@ -103,7 +136,6 @@ async function otomatikOdemeKontrolu() {
     const odenenTutar = Number(data.odenenTutar) || 0;
     const kalanTutar = Math.max(toplamTutar - odenenTutar, 0);
 
-    // 📅 Mesaj için tarih formatı
     let sonOdeme = "-";
     if (sonOdemeRaw.toDate) {
       sonOdeme = sonOdemeRaw
@@ -114,13 +146,33 @@ async function otomatikOdemeKontrolu() {
     }
 
     /* =========================
-       ⚠️ HATIRLATMA (X gün kala)
+       HATIRLATMA TEST
     ========================= */
+    console.log("🧪 HATIRLATMA KONTROLÜ");
+    console.log(
+      "gunFarki === hatirlatmaGunOnce →",
+      gunFarki,
+      "===",
+      data.hatirlatmaGunOnce,
+      "=>",
+      gunFarki === data.hatirlatmaGunOnce
+    );
+    console.log(
+      "hatirlatmaAktif === true →",
+      data.hatirlatmaAktif === true
+    );
+    console.log(
+      "hatirlatmaGonderildi !== true →",
+      data.hatirlatmaGonderildi !== true
+    );
+
     if (
       gunFarki === data.hatirlatmaGunOnce &&
       data.hatirlatmaAktif === true &&
       data.hatirlatmaGonderildi !== true
     ) {
+      console.log("🚀 HATIRLATMA BLOĞUNA GİRİLDİ");
+
       await telegramMesajGonder(
         `⚠️ <b>ÖDEME HATIRLATMASI</b>\n\n` +
         `🏢 <b>Firma:</b> ${firmaAdi}\n` +
@@ -139,46 +191,10 @@ async function otomatikOdemeKontrolu() {
       bildirimSayisi++;
       continue;
     }
-
-    /* =========================
-       ❌ GECİKMİŞ ÖDEME
-       (HAFTADA 1)
-    ========================= */
-    if (gunFarki < 0) {
-      const sonBildirimGun = gunFarkiStringTarih(
-        data.gecikmeSonBildirimTarihi
-      );
-
-      const tekrarGonder =
-        data.gecikmeBildirildi !== true ||
-        sonBildirimGun === null ||
-        sonBildirimGun >= 7;
-
-      if (!tekrarGonder) continue;
-
-      await telegramMesajGonder(
-        `❌ <b>GECİKMİŞ ÖDEME</b>\n\n` +
-        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
-        `📂 <b>Kategori:</b> ${kategori}\n` +
-        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
-        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
-        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
-        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
-        `⏱ <b>Gecikme:</b> ${Math.abs(gunFarki)} gün`
-      );
-
-      await doc.ref.update({
-        gecikmeBildirildi: true,
-        gecikmeSonBildirimTarihi:
-          new Date().toLocaleDateString("tr-TR"),
-      });
-
-      bildirimSayisi++;
-    }
   }
 
   console.log(
-    `GitHub Action → ${bildirimSayisi} bildirim gönderildi`
+    `✅ CRON BITTI → ${bildirimSayisi} bildirim gönderildi`
   );
 }
 
