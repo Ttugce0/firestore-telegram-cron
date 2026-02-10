@@ -10,6 +10,13 @@ jobs:
   run-cron:
     runs-on: ubuntu-latest
 
+    # 🔥 KRİTİK SATIR (SORUNU ÇÖZEN)
+    env:
+      TZ: Europe/Istanbul
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
     steps:
       - name: Repo'yu çek
         uses: actions/checkout@v4
@@ -23,8 +30,4 @@ jobs:
         run: npm install
 
       - name: Firebase & Telegram cron çalıştır
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node checkPayments.js
