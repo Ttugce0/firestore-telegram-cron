@@ -60,7 +60,8 @@ function gunFarkiHesapla(tarih) {
    ANA CRON İŞİ
 ========================= */
 async function otomatikOdemeKontrolu() {
-  const snapshot = await db.collection("odemeler").get();
+ const snapshot = await db.collectionGroup("odemeler").get();
+
   let bildirimSayisi = 0;
 
   for (const doc of snapshot.docs) {
