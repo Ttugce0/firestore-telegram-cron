@@ -1,6 +1,8 @@
 require("dotenv").config();
 const axios = require("axios");
 const db = require("./firebase");
+const admin = require("firebase-admin");
+
 
 /* =========================
    CRON BAŞLANGIÇ LOG
@@ -101,12 +103,14 @@ async function otomatikOdemeKontrolu() {
     /* =========================
        HATIRLATMA KONTROLÜ
     ========================= */
-    if (
-      gunFarki <= data.hatirlatmaGunOnce &&
-      gunFarki >= 0 &&
-      data.hatirlatmaAktif === true &&
-      data.hatirlatmaGonderildi !== true
-    ) {
+   const esikler = [3, 1, 0, -1, -3, -7];
+
+if (
+  data.hatirlatmaAktif === true &&
+  esikler.includes(gunFarki) &&
+  !data.gonderilenHatirlatmalar?.includes(gunFarki)
+)
+ {
       console.log("🚀 HATIRLATMA GÖNDERİLİYOR");
 
       await telegramMesajGonder(
@@ -121,8 +125,10 @@ async function otomatikOdemeKontrolu() {
       );
 
       await doc.ref.update({
-        hatirlatmaGonderildi: true,
-      });
+  gonderilenHatirlatmalar:
+    admin.firestore.FieldValue.arrayUnion(gunFarki),
+});
+
 
       bildirimSayisi++;
     }
