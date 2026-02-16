@@ -74,7 +74,6 @@ async function otomatikOdemeKontrolu() {
     console.log("🏢 Firma:", data.firmaAdi);
     console.log("📅 Raw sonOdeme:", data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi);
     console.log("🔔 hatirlatmaAktif:", data.hatirlatmaAktif);
-    console.log("🔕 hatirlatmaGonderildi:", data.hatirlatmaGonderildi);
     console.log("⏳ hatirlatmaGunOnce:", data.hatirlatmaGunOnce);
     console.log("💳 durum:", data.durum);
 
