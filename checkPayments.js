@@ -110,6 +110,7 @@ async function periyotUretici() {
       kategori: data.kategori,
       tutar: data.tutar,
       periyot: data.periyot,
+      aciklama: data.aciklama || "",
       sonOdemeTarihi_ts: yeniTarih,
       durum: "odenmedi",
       odenenTutar: 0,
