@@ -109,19 +109,45 @@ if (
   esikler.includes(gunFarki) &&
   !data.gonderilenHatirlatmalar?.includes(gunFarki)
 )
- {
-      console.log("🚀 HATIRLATMA GÖNDERİLİYOR");
+{
+  console.log("🚀 HATIRLATMA GÖNDERİLİYOR");
 
-      await telegramMesajGonder(
-        `⚠️ <b>ÖDEME HATIRLATMASI</b>\n\n` +
-        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
-        `📂 <b>Kategori:</b> ${kategori}\n` +
-        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
-        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
-        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
-        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
-        `⏳ <b>Kalan Süre:</b> ${gunFarki} gün`
-      );
+  let mesajBaslik = "";
+  let durumMetni = "";
+
+  if (gunFarki > 0) {
+    mesajBaslik = "📌 <b>YAKLAŞAN ÖDEME</b>";
+    durumMetni = `⏳ Ödemeye ${gunFarki} gün kaldı.`;
+  }
+
+  if (gunFarki === 0) {
+    mesajBaslik = "⚠️ <b>SON ÖDEME GÜNÜ</b>";
+    durumMetni = "📌 Bugün son ödeme günü.";
+  }
+
+  if (gunFarki < 0) {
+    mesajBaslik = "🚨 <b>GECİKMİŞ ÖDEME</b>";
+    durumMetni = `⛔ Ödeme ${Math.abs(gunFarki)} gündür gecikmiş durumda.`;
+  }
+
+  if (gunFarki <= -3) {
+    mesajBaslik = "🛑 <b>CİDDİ GECİKME</b>";
+  }
+
+  if (gunFarki <= -7) {
+    mesajBaslik = "🔥 <b>KRİTİK GECİKME</b>";
+  }
+
+  await telegramMesajGonder(
+    `${mesajBaslik}\n\n` +
+    `🏢 <b>Firma:</b> ${firmaAdi}\n` +
+    `📂 <b>Kategori:</b> ${kategori}\n` +
+    `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
+    `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
+    `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
+    `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
+    `${durumMetni}`
+  );
 
       await doc.ref.update({
   gonderilenHatirlatmalar:
