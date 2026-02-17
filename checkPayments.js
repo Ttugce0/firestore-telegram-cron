@@ -57,6 +57,74 @@ function gunFarkiHesapla(tarih) {
 
   return Math.round((hedef - bugun) / (1000 * 60 * 60 * 24));
 }
+/* =========================
+   PERİYOT ÜRETİCİ
+========================= */
+async function periyotUretici() {
+
+  console.log("🔁 PERİYOT ÜRETİMİ BAŞLADI");
+
+  const snapshot = await db.collectionGroup("odemeler")
+    .where("isTemplate", "==", true)
+    .where("aktif", "==", true)
+    .get();
+
+  const bugun = new Date();
+  bugun.setHours(0,0,0,0);
+
+  for (const doc of snapshot.docs) {
+
+    const data = doc.data();
+    const uid = doc.ref.parent.parent.id;
+
+    let sonUretilen = data.sonUretilenTarih?.toDate();
+    if (!sonUretilen) continue;
+
+    sonUretilen.setHours(0,0,0,0);
+
+    while (sonUretilen < bugun) {
+
+      let yeniTarih = new Date(sonUretilen);
+
+      if (data.periyot === "gunluk") {
+        yeniTarih.setDate(yeniTarih.getDate() + 1);
+      }
+      else if (data.periyot === "aylik") {
+        yeniTarih.setMonth(yeniTarih.getMonth() + 1);
+      }
+      else if (data.periyot === "yillik") {
+        yeniTarih.setFullYear(yeniTarih.getFullYear() + 1);
+      }
+
+      await db
+        .collection("kullanicilar")
+        .doc(uid)
+        .collection("odemeler")
+        .add({
+          templateId: doc.id,
+          firmaId: data.firmaId,
+          firmaAdi: data.firmaAdi,
+          kategori: data.kategori,
+          tutar: data.tutar,
+          periyot: data.periyot,
+          sonOdemeTarihi_ts: yeniTarih,
+          durum: "odenmedi",
+          odenenTutar: 0,
+          hatirlatmaAktif: true,
+          gonderilenHatirlatmalar: [],
+          olusturmaTarihi: new Date(),
+        });
+
+      sonUretilen = yeniTarih;
+    }
+
+    await doc.ref.update({
+      sonUretilenTarih: sonUretilen
+    });
+  }
+
+  console.log("✅ PERİYOT ÜRETİMİ BİTTİ");
+}
 
 /* =========================
    ANA CRON İŞİ
@@ -82,6 +150,7 @@ async function otomatikOdemeKontrolu() {
 
     if (!sonOdemeRaw) continue;
     if (data.durum === "odendi") continue;
+    if (data.isTemplate) continue;
 
     const gunFarki = gunFarkiHesapla(sonOdemeRaw);
     console.log("📆 gunFarki:", gunFarki);
@@ -167,10 +236,12 @@ if (
 ========================= */
 (async () => {
   try {
-    await otomatikOdemeKontrolu();
+    await periyotUretici();        // 🔁 ÖNCE ÜRET
+    await otomatikOdemeKontrolu(); // ⏰ SONRA KONTROL
   } catch (err) {
     console.error("❌ Cron çalışırken hata:", err);
   } finally {
     process.exit(0);
   }
 })();
+
