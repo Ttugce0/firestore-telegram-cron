@@ -82,41 +82,44 @@ async function periyotUretici() {
 
     sonUretilen.setHours(0,0,0,0);
 
-    while (sonUretilen < bugun) {
+   while (sonUretilen < bugun) {
 
-      let yeniTarih = new Date(sonUretilen);
+  let yeniTarih = new Date(sonUretilen);
 
-      if (data.periyot === "gunluk") {
-        yeniTarih.setDate(yeniTarih.getDate() + 1);
-      }
-      else if (data.periyot === "aylik") {
-        yeniTarih.setMonth(yeniTarih.getMonth() + 1);
-      }
-      else if (data.periyot === "yillik") {
-        yeniTarih.setFullYear(yeniTarih.getFullYear() + 1);
-      }
+  if (data.periyot === "gunluk") {
+    yeniTarih.setDate(yeniTarih.getDate() + 1);
+  }
+  else if (data.periyot === "aylik") {
+    yeniTarih.setMonth(yeniTarih.getMonth() + 1);
+  }
+  else if (data.periyot === "yillik") {
+    yeniTarih.setFullYear(yeniTarih.getFullYear() + 1);
+  }
 
-      await db
-        .collection("kullanicilar")
-        .doc(uid)
-        .collection("odemeler")
-        .add({
-          templateId: doc.id,
-          firmaId: data.firmaId,
-          firmaAdi: data.firmaAdi,
-          kategori: data.kategori,
-          tutar: data.tutar,
-          periyot: data.periyot,
-          sonOdemeTarihi_ts: yeniTarih,
-          durum: "odenmedi",
-          odenenTutar: 0,
-          hatirlatmaAktif: true,
-          gonderilenHatirlatmalar: [],
-          olusturmaTarihi: new Date(),
-        });
+  // 🔥 KRİTİK DÜZELTME
+  yeniTarih.setHours(12, 0, 0, 0);
 
-      sonUretilen = yeniTarih;
-    }
+  await db
+    .collection("kullanicilar")
+    .doc(uid)
+    .collection("odemeler")
+    .add({
+      templateId: doc.id,
+      firmaId: data.firmaId,
+      firmaAdi: data.firmaAdi,
+      kategori: data.kategori,
+      tutar: data.tutar,
+      periyot: data.periyot,
+      sonOdemeTarihi_ts: yeniTarih,
+      durum: "odenmedi",
+      odenenTutar: 0,
+      hatirlatmaAktif: true,
+      gonderilenHatirlatmalar: [],
+      olusturmaTarihi: new Date(),
+    });
+
+  sonUretilen = yeniTarih;
+}
 
     await doc.ref.update({
       sonUretilenTarih: sonUretilen
