@@ -134,20 +134,14 @@ async function periyotUretici() {
    ANA CRON İŞİ
 ========================= */
 async function otomatikOdemeKontrolu() {
- const snapshot = await db.collectionGroup("odemeler").get();
-
+  const snapshot = await db.collectionGroup("odemeler").get();
   let bildirimSayisi = 0;
+
+  const configCache = {}; // 🔥 performans için cache
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
-
-    console.log("\n===============================");
-    console.log("📄 DOC ID:", doc.id);
-    console.log("🏢 Firma:", data.firmaAdi);
-    console.log("📅 Raw sonOdeme:", data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi);
-    console.log("🔔 hatirlatmaAktif:", data.hatirlatmaAktif);
-    console.log("⏳ hatirlatmaGunOnce:", data.hatirlatmaGunOnce);
-    console.log("💳 durum:", data.durum);
+    const uid = doc.ref.parent.parent.id;
 
     const sonOdemeRaw =
       data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi;
@@ -157,76 +151,108 @@ async function otomatikOdemeKontrolu() {
     if (data.isTemplate) continue;
 
     const gunFarki = gunFarkiHesapla(sonOdemeRaw);
-    console.log("📆 gunFarki:", gunFarki);
-
     if (gunFarki === null) continue;
 
-    const firmaAdi = data.firmaAdi || "Bilinmiyor";
-    const kategori = data.kategori || data.aciklama || "Bilinmiyor";
+    /* =========================
+       KULLANICI CONFIG OKUMA
+    ========================= */
 
-    const toplamTutar = Number(data.tutar) || 0;
-    const odenenTutar = Number(data.odenenTutar) || 0;
-    const kalanTutar = Math.max(toplamTutar - odenenTutar, 0);
+    if (!(uid in configCache)) {
+      const configDoc = await db
+        .collection("kullanicilar")
+        .doc(uid)
+        .collection("settings")
+        .doc("reminderConfig")
+        .get();
 
-    const sonOdeme = sonOdemeRaw.toDate
-      ? sonOdemeRaw.toDate().toLocaleDateString("tr-TR")
-      : sonOdemeRaw;
+      configCache[uid] = configDoc.exists
+        ? configDoc.data()
+        : null;
+    }
+
+    const userConfig = configCache[uid];
+
+    /* =========================
+       DİNAMİK EŞİK ÜRETİMİ
+    ========================= */
+
+    let esikler = [3, 1, 0, -1, -3, -7]; // default sistem
+
+    if (userConfig && userConfig.aktifMi === true) {
+      const baslamaGun = userConfig.baslamaGun ?? 3;
+
+      esikler = [];
+
+      // Ödeme gününe kadar her gün
+      for (let i = baslamaGun; i >= 0; i--) {
+        esikler.push(i);
+      }
+
+      // Gecikme eşikleri sabit bırakıyoruz
+      esikler.push(-1, -3, -7);
+    }
 
     /* =========================
        HATIRLATMA KONTROLÜ
     ========================= */
-   const esikler = [3, 1, 0, -1, -3, -7];
 
-if (
-  data.hatirlatmaAktif === true &&
-  esikler.includes(gunFarki) &&
-  !data.gonderilenHatirlatmalar?.includes(gunFarki)
-)
-{
-  console.log("🚀 HATIRLATMA GÖNDERİLİYOR");
+    if (
+      data.hatirlatmaAktif === true &&
+      esikler.includes(gunFarki) &&
+      !data.gonderilenHatirlatmalar?.includes(gunFarki)
+    ) {
+      const firmaAdi = data.firmaAdi || "Bilinmiyor";
+      const kategori = data.kategori || data.aciklama || "Bilinmiyor";
 
-  let mesajBaslik = "";
-  let durumMetni = "";
+      const toplamTutar = Number(data.tutar) || 0;
+      const odenenTutar = Number(data.odenenTutar) || 0;
+      const kalanTutar = Math.max(toplamTutar - odenenTutar, 0);
 
-  if (gunFarki > 0) {
-    mesajBaslik = "📌 <b>YAKLAŞAN ÖDEME</b>";
-    durumMetni = `⏳ Ödemeye ${gunFarki} gün kaldı.`;
-  }
+      const sonOdeme = sonOdemeRaw.toDate
+        ? sonOdemeRaw.toDate().toLocaleDateString("tr-TR")
+        : sonOdemeRaw;
 
-  if (gunFarki === 0) {
-    mesajBaslik = "⚠️ <b>SON ÖDEME GÜNÜ</b>";
-    durumMetni = "📌 Bugün son ödeme günü.";
-  }
+      let mesajBaslik = "";
+      let durumMetni = "";
 
-  if (gunFarki < 0) {
-    mesajBaslik = "🚨 <b>GECİKMİŞ ÖDEME</b>";
-    durumMetni = `⛔ Ödeme ${Math.abs(gunFarki)} gündür gecikmiş durumda.`;
-  }
+      if (gunFarki > 0) {
+        mesajBaslik = "📌 <b>YAKLAŞAN ÖDEME</b>";
+        durumMetni = `⏳ Ödemeye ${gunFarki} gün kaldı.`;
+      }
 
-  if (gunFarki <= -3) {
-    mesajBaslik = "🛑 <b>CİDDİ GECİKME</b>";
-  }
+      if (gunFarki === 0) {
+        mesajBaslik = "⚠️ <b>SON ÖDEME GÜNÜ</b>";
+        durumMetni = "📌 Bugün son ödeme günü.";
+      }
 
-  if (gunFarki <= -7) {
-    mesajBaslik = "🔥 <b>KRİTİK GECİKME</b>";
-  }
+      if (gunFarki < 0) {
+        mesajBaslik = "🚨 <b>GECİKMİŞ ÖDEME</b>";
+        durumMetni = `⛔ Ödeme ${Math.abs(gunFarki)} gündür gecikmiş durumda.`;
+      }
 
-  await telegramMesajGonder(
-    `${mesajBaslik}\n\n` +
-    `🏢 <b>Firma:</b> ${firmaAdi}\n` +
-    `📂 <b>Kategori:</b> ${kategori}\n` +
-    `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
-    `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
-    `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
-    `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
-    `${durumMetni}`
-  );
+      if (gunFarki <= -3) {
+        mesajBaslik = "🛑 <b>CİDDİ GECİKME</b>";
+      }
+
+      if (gunFarki <= -7) {
+        mesajBaslik = "🔥 <b>KRİTİK GECİKME</b>";
+      }
+
+      await telegramMesajGonder(
+        `${mesajBaslik}\n\n` +
+          `🏢 <b>Firma:</b> ${firmaAdi}\n` +
+          `📂 <b>Kategori:</b> ${kategori}\n` +
+          `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
+          `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
+          `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
+          `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
+          `${durumMetni}`
+      );
 
       await doc.ref.update({
-  gonderilenHatirlatmalar:
-    admin.firestore.FieldValue.arrayUnion(gunFarki),
-});
-
+        gonderilenHatirlatmalar:
+          admin.firestore.FieldValue.arrayUnion(gunFarki),
+      });
 
       bildirimSayisi++;
     }
@@ -234,7 +260,6 @@ if (
 
   console.log(`✅ CRON BITTI → ${bildirimSayisi} bildirim gönderildi`);
 }
-
 /* =========================
    ÇALIŞTIR
 ========================= */
