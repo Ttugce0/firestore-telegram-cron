@@ -176,7 +176,7 @@ async function otomatikOdemeKontrolu() {
 ========================= */
 
 /* =========================
-   SAAT KONTROLÜ (±5 dk tolerans)
+   SAAT KONTROLÜ (Saat Başı)
 ========================= */
 
 if (
@@ -186,26 +186,10 @@ if (
   userConfig.saatler.length > 0
 ) {
   const simdi = new Date();
-  const simdiDakikaToplam = simdi.getHours() * 60 + simdi.getMinutes();
+  const simdikiSaat = simdi.getHours(); // sadece saat
 
-  let saatUygun = false;
-
-  for (const saatStr of userConfig.saatler) {
-    const [saat, dakika] = saatStr.split(":").map(Number);
-    const hedefDakikaToplam = saat * 60 + dakika;
-
-    let fark = Math.abs(simdiDakikaToplam - hedefDakikaToplam);
-
-    // 🔥 24 saat döngü güvenliği
-    fark = Math.min(fark, 1440 - fark);
-
-    if (fark <= 4) {   // 5 dakikalık cron için ideal tolerans
-      saatUygun = true;
-      break;
-    }
-  }
-
-  if (!saatUygun) {
+  // Firestore'da saatler number olmalı: [14, 20, 9]
+  if (!userConfig.saatler.includes(simdikiSaat)) {
     continue;
   }
 }
@@ -231,13 +215,10 @@ if (
     }
 
     // 🔥 Gün + Saat anahtarı oluştur
-const simdikiSaatStr = new Date().toLocaleTimeString("tr-TR", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
+const simdikiSaat = new Date().getHours();
+const bildirimKey = `${gunFarki}_${simdikiSaat}`;
 
-const bildirimKey = `${gunFarki}_${simdikiSaatStr}`;
+
     /* =========================
        HATIRLATMA KONTROLÜ
     ========================= */
