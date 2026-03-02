@@ -1,8 +1,8 @@
-name: Hourly Firestore Payment Check
+name: Firestore Payment Check (Every 5 Minutes)
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "*/5 * * * *"   # 🔥 Her 5 dakikada bir
   workflow_dispatch:
 
 jobs:
@@ -15,19 +15,12 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
-      - name: Repo'yu çek
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Node.js kur
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Service account dosyası oluştur
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
-
-      - name: Paketleri yükle
-        run: npm install
-
-      - name: Firebase & Telegram cron çalıştır
-        run: node checkPayments.js
+      - run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
+      - run: npm install
+      - run: node checkPayments.js
