@@ -137,7 +137,7 @@ async function otomatikOdemeKontrolu() {
   const snapshot = await db.collectionGroup("odemeler").get();
   let bildirimSayisi = 0;
 
-  const configCache = {}; // 🔥 performans için cache
+  const configCache = {}; 
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
@@ -227,6 +227,14 @@ if (
       esikler.push(-1, -3, -7);
     }
 
+    // 🔥 Gün + Saat anahtarı oluştur
+const simdikiSaatStr = new Date().toLocaleTimeString("tr-TR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+const bildirimKey = `${gunFarki}_${simdikiSaatStr}`;
     /* =========================
        HATIRLATMA KONTROLÜ
     ========================= */
@@ -234,7 +242,7 @@ if (
     if (
       data.hatirlatmaAktif === true &&
       esikler.includes(gunFarki) &&
-      !data.gonderilenHatirlatmalar?.includes(gunFarki)
+      !data.gonderilenHatirlatmalar?.includes(bildirimKey)
     ) {
       const firmaAdi = data.firmaAdi || "Bilinmiyor";
       const kategori = data.kategori || data.aciklama || "Bilinmiyor";
@@ -286,7 +294,7 @@ if (
 
       await doc.ref.update({
         gonderilenHatirlatmalar:
-          admin.firestore.FieldValue.arrayUnion(gunFarki),
+          admin.firestore.FieldValue.arrayUnion(bildirimKey),
       });
 
       bildirimSayisi++;
