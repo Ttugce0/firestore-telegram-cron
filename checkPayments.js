@@ -214,6 +214,15 @@ if (
       esikler.push(-1, -3, -7);
     }
 
+     console.log("------ DEBUG ------");
+console.log("UID:", uid);
+console.log("GUN FARKI:", gunFarki);
+console.log("SIMDIKI SAAT:", new Date().getHours());
+console.log("KULLANICI SAATLER:", userConfig?.saatler);
+console.log("ESIKLER:", esikler);
+console.log("DAHA ONCE GONDERILEN:", data.gonderilenHatirlatmalar);
+console.log("-------------------");
+
     // 🔥 Gün + Saat anahtarı oluştur
 const simdikiSaat = new Date().getHours();
 const bildirimKey = `${gunFarki}_${simdikiSaat}`;
