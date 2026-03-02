@@ -175,6 +175,10 @@ async function otomatikOdemeKontrolu() {
    SAAT KONTROLÜ
 ========================= */
 
+/* =========================
+   SAAT KONTROLÜ (±5 dk tolerans)
+========================= */
+
 if (
   userConfig &&
   userConfig.aktifMi === true &&
@@ -182,15 +186,24 @@ if (
   userConfig.saatler.length > 0
 ) {
   const simdi = new Date();
+  const simdiDakikaToplam = simdi.getHours() * 60 + simdi.getMinutes();
 
-  const simdikiSaat = simdi.toLocaleTimeString("tr-TR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  let saatUygun = false;
 
-  if (!userConfig.saatler.includes(simdikiSaat)) {
-    continue; // Saat eşleşmiyorsa bu ödemeyi atla
+  for (const saatStr of userConfig.saatler) {
+    const [saat, dakika] = saatStr.split(":").map(Number);
+    const hedefDakikaToplam = saat * 60 + dakika;
+
+    const fark = Math.abs(simdiDakikaToplam - hedefDakikaToplam);
+
+    if (fark <= 5) { // 🔥 5 dakika tolerans
+      saatUygun = true;
+      break;
+    }
+  }
+
+  if (!saatUygun) {
+    continue;
   }
 }
 
