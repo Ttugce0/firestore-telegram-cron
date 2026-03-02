@@ -194,9 +194,12 @@ if (
     const [saat, dakika] = saatStr.split(":").map(Number);
     const hedefDakikaToplam = saat * 60 + dakika;
 
-    const fark = Math.abs(simdiDakikaToplam - hedefDakikaToplam);
+    let fark = Math.abs(simdiDakikaToplam - hedefDakikaToplam);
 
-    if (fark <= 5) { // 🔥 5 dakika tolerans
+    // 🔥 24 saat döngü güvenliği
+    fark = Math.min(fark, 1440 - fark);
+
+    if (fark <= 4) {   // 5 dakikalık cron için ideal tolerans
       saatUygun = true;
       break;
     }
