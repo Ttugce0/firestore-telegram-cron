@@ -171,6 +171,28 @@ async function otomatikOdemeKontrolu() {
     }
 
     const userConfig = configCache[uid];
+     /* =========================
+   SAAT KONTROLÜ
+========================= */
+
+if (
+  userConfig &&
+  userConfig.aktifMi === true &&
+  Array.isArray(userConfig.saatler) &&
+  userConfig.saatler.length > 0
+) {
+  const simdi = new Date();
+
+  const simdikiSaat = simdi.toLocaleTimeString("tr-TR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  if (!userConfig.saatler.includes(simdikiSaat)) {
+    continue; // Saat eşleşmiyorsa bu ödemeyi atla
+  }
+}
 
     /* =========================
        DİNAMİK EŞİK ÜRETİMİ
