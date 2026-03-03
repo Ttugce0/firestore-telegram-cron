@@ -185,10 +185,14 @@ if (
   Array.isArray(userConfig.saatler) &&
   userConfig.saatler.length > 0
 ) {
-  const simdi = new Date();
-  const simdikiSaat = simdi.getHours(); // sadece saat
+  const simdikiSaat = Number(
+    new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date())
+  );
 
-  // Firestore'da saatler number olmalı: [14, 20, 9]
   if (!userConfig.saatler.includes(simdikiSaat)) {
     continue;
   }
@@ -223,12 +227,16 @@ console.log("ESIKLER:", esikler);
 console.log("DAHA ONCE GONDERILEN:", data.gonderilenHatirlatmalar);
 console.log("-------------------");
 
-    const simdi = new Date();
-const simdikiSaat = simdi.getHours();
-const bugunStr = simdi.toISOString().split("T")[0];
+   const nowTR = new Date().toLocaleString("sv-SE", {
+  timeZone: "Europe/Istanbul",
+});
+
+const trDate = new Date(nowTR);
+
+const simdikiSaat = trDate.getHours();
+const bugunStr = nowTR.split(" ")[0];
 
 const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
-
 
     /* =========================
        HATIRLATMA KONTROLÜ
