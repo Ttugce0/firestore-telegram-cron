@@ -223,9 +223,11 @@ console.log("ESIKLER:", esikler);
 console.log("DAHA ONCE GONDERILEN:", data.gonderilenHatirlatmalar);
 console.log("-------------------");
 
-    // 🔥 Gün + Saat anahtarı oluştur
-const simdikiSaat = new Date().getHours();
-const bildirimKey = `${gunFarki}_${simdikiSaat}`;
+    const simdi = new Date();
+const simdikiSaat = simdi.getHours();
+const bugunStr = simdi.toISOString().split("T")[0];
+
+const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
 
 
     /* =========================
