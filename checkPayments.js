@@ -159,11 +159,11 @@ async function otomatikOdemeKontrolu() {
 
     if (!(uid in configCache)) {
       const configDoc = await db
-        .collection("kullanicilar")
-        .doc(uid)
-        .collection("settings")
-        .doc("reminderConfig")
-        .get();
+  .collection("kullanicilar")
+  .doc(uid)
+  .collection("settings")
+  .doc("reminderConfig")
+  .get();
 
       configCache[uid] = configDoc.exists
         ? configDoc.data()
