@@ -221,7 +221,15 @@ if (
      console.log("------ DEBUG ------");
 console.log("UID:", uid);
 console.log("GUN FARKI:", gunFarki);
-console.log("SIMDIKI SAAT:", new Date().getHours());
+const debugSaat = Number(
+  new Intl.DateTimeFormat("tr-TR", {
+    timeZone: "Europe/Istanbul",
+    hour: "numeric",
+    hour12: false,
+  }).format(new Date())
+);
+
+console.log("SIMDIKI SAAT (TR):", debugSaat);
 console.log("KULLANICI SAATLER:", userConfig?.saatler);
 console.log("ESIKLER:", esikler);
 console.log("DAHA ONCE GONDERILEN:", data.gonderilenHatirlatmalar);
