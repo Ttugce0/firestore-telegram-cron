@@ -64,10 +64,11 @@ async function periyotUretici() {
 
   console.log("🔁 PERİYOT ÜRETİMİ BAŞLADI");
 
-const snapshot = await db.collectionGroup("odemeler").get();
-    .where("isTemplate", "==", true)
-    .where("aktif", "==", true)
-    .get();
+const snapshot = await db
+  .collectionGroup("odemeler")
+  .where("isTemplate", "==", true)
+  .where("aktif", "==", true)
+  .get();
 
   const bugun = new Date();
   bugun.setHours(0,0,0,0);
