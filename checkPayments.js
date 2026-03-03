@@ -130,131 +130,92 @@ const snapshot = await db.collectionGroup("odemeler").get();
   console.log("✅ PERİYOT ÜRETİMİ BİTTİ");
 }
 
-/* =========================
-   ANA CRON İŞİ
-========================= */
 async function otomatikOdemeKontrolu() {
-  const snapshot = await db.collectionGroup("odemeler").get();
+
+  const usersSnapshot = await db.collection("kullanicilar").get();
   let bildirimSayisi = 0;
 
-  const configCache = {}; 
+  for (const userDoc of usersSnapshot.docs) {
 
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    const uid = doc.ref.parent.parent.id;
+    const uid = userDoc.id;
 
-    const sonOdemeRaw =
-      data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi;
+    // 🔹 1. Kullanıcının reminder ayarını oku
+    const configDoc = await db
+      .collection("kullanicilar")
+      .doc(uid)
+      .collection("settings")
+      .doc("reminderConfig")
+      .get();
 
-    if (!sonOdemeRaw) continue;
-    if (data.durum === "odendi") continue;
-    if (data.isTemplate) continue;
+    if (!configDoc.exists) continue;
 
-    const gunFarki = gunFarkiHesapla(sonOdemeRaw);
-    if (gunFarki === null) continue;
+    const userConfig = configDoc.data();
 
-    /* =========================
-       KULLANICI CONFIG OKUMA
-    ========================= */
+    if (!userConfig.aktifMi) continue;
 
-    if (!(uid in configCache)) {
-      const configDoc = await db
-  .collection("kullanicilar")
-  .doc(uid)
-  .collection("settings")
-  .doc("reminderConfig")
-  .get();
+    // 🔹 2. Türkiye saatini al
+    const simdikiSaat = Number(
+      new Intl.DateTimeFormat("tr-TR", {
+        timeZone: "Europe/Istanbul",
+        hour: "numeric",
+        hour12: false,
+      }).format(new Date())
+    );
 
-      configCache[uid] = configDoc.exists
-        ? configDoc.data()
-        : null;
+    if (
+      !Array.isArray(userConfig.saatler) ||
+      !userConfig.saatler.includes(simdikiSaat)
+    ) {
+      continue;
     }
 
-    const userConfig = configCache[uid];
-     /* =========================
-   SAAT KONTROLÜ
-========================= */
+    // 🔹 3. Kullanıcının ödemelerini çek
+    const paymentsSnapshot = await db
+      .collection("kullanicilar")
+      .doc(uid)
+      .collection("odemeler")
+      .get();
 
-/* =========================
-   SAAT KONTROLÜ (Saat Başı)
-========================= */
+    for (const paymentDoc of paymentsSnapshot.docs) {
 
-if (
-  userConfig &&
-  userConfig.aktifMi === true &&
-  Array.isArray(userConfig.saatler) &&
-  userConfig.saatler.length > 0
-) {
-  const simdikiSaat = Number(
-    new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
-      hour: "numeric",
-      hour12: false,
-    }).format(new Date())
-  );
+      const data = paymentDoc.data();
 
-  if (!userConfig.saatler.includes(simdikiSaat)) {
-    continue;
-  }
-}
+      if (data.durum === "odendi") continue;
+      if (data.isTemplate) continue;
+      if (!data.hatirlatmaAktif) continue;
 
-    /* =========================
-       DİNAMİK EŞİK ÜRETİMİ
-    ========================= */
+      const sonOdemeRaw =
+        data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi;
 
-    let esikler = [3, 1, 0, -1, -3, -7]; // default sistem
+      if (!sonOdemeRaw) continue;
 
-    if (userConfig && userConfig.aktifMi === true) {
+      const gunFarki = gunFarkiHesapla(sonOdemeRaw);
+      if (gunFarki === null) continue;
+
+      // 🔹 4. Eşik üret
+      let esikler = [];
+
       const baslamaGun = userConfig.baslamaGun ?? 3;
 
-      esikler = [];
-
-      // Ödeme gününe kadar her gün
       for (let i = baslamaGun; i >= 0; i--) {
         esikler.push(i);
       }
 
-      // Gecikme eşikleri sabit bırakıyoruz
       esikler.push(-1, -3, -7);
-    }
 
-     console.log("------ DEBUG ------");
-console.log("UID:", uid);
-console.log("GUN FARKI:", gunFarki);
-const debugSaat = Number(
-  new Intl.DateTimeFormat("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    hour: "numeric",
-    hour12: false,
-  }).format(new Date())
-);
+      if (!esikler.includes(gunFarki)) continue;
 
-console.log("SIMDIKI SAAT (TR):", debugSaat);
-console.log("KULLANICI SAATLER:", userConfig?.saatler);
-console.log("ESIKLER:", esikler);
-console.log("DAHA ONCE GONDERILEN:", data.gonderilenHatirlatmalar);
-console.log("-------------------");
+      const nowTR = new Date().toLocaleString("sv-SE", {
+        timeZone: "Europe/Istanbul",
+      });
 
-   const nowTR = new Date().toLocaleString("sv-SE", {
-  timeZone: "Europe/Istanbul",
-});
+      const trDate = new Date(nowTR);
+      const bugunStr = nowTR.split(" ")[0];
 
-const trDate = new Date(nowTR);
+      const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
 
-const simdikiSaat = trDate.getHours();
-const bugunStr = nowTR.split(" ")[0];
+      if (data.gonderilenHatirlatmalar?.includes(bildirimKey)) continue;
 
-const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
-
-    /* =========================
-       HATIRLATMA KONTROLÜ
-    ========================= */
-
-    if (
-      data.hatirlatmaAktif === true &&
-      esikler.includes(gunFarki) &&
-      !data.gonderilenHatirlatmalar?.includes(bildirimKey)
-    ) {
       const firmaAdi = data.firmaAdi || "Bilinmiyor";
       const kategori = data.kategori || data.aciklama || "Bilinmiyor";
 
@@ -284,14 +245,6 @@ const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
         durumMetni = `⛔ Ödeme ${Math.abs(gunFarki)} gündür gecikmiş durumda.`;
       }
 
-      if (gunFarki <= -3) {
-        mesajBaslik = "🛑 <b>CİDDİ GECİKME</b>";
-      }
-
-      if (gunFarki <= -7) {
-        mesajBaslik = "🔥 <b>KRİTİK GECİKME</b>";
-      }
-
       await telegramMesajGonder(
         `${mesajBaslik}\n\n` +
           `🏢 <b>Firma:</b> ${firmaAdi}\n` +
@@ -303,7 +256,7 @@ const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
           `${durumMetni}`
       );
 
-      await doc.ref.update({
+      await paymentDoc.ref.update({
         gonderilenHatirlatmalar:
           admin.firestore.FieldValue.arrayUnion(bildirimKey),
       });
