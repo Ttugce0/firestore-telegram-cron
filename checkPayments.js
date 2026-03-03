@@ -64,7 +64,11 @@ async function periyotUretici() {
 
   console.log("🔁 PERİYOT ÜRETİMİ BAŞLADI");
 
-  const snapshot = await db.collectionGroup("odemeler")
+const snapshot = await db
+  .collection("kullanicilar")
+  .doc("nPIv6mXhXwQiT9CEt1VNnZacQy12")
+  .collection("odemeler")
+  .get();
     .where("isTemplate", "==", true)
     .where("aktif", "==", true)
     .get();
