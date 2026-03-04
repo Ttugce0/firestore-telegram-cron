@@ -164,14 +164,10 @@ if (!userConfig.aktifMi) continue;
       }).format(new Date())
     );
      console.log("🕐 SIMDIKI SAAT:", simdikiSaat);
-console.log("⏰ AYARLI SAATLER:", userConfig.saatler);
-
-    if (
-      !Array.isArray(userConfig.saatler) ||
-      !userConfig.saatler.includes(simdikiSaat)
-    ) {
-      continue;
-    }
+console.log("⏰ AYARLI SAAT:", userConfig.saat);
+  if (simdikiSaat < userConfig.saat) {
+  continue;
+}
 
     // 🔹 3. Kullanıcının ödemelerini çek
     const paymentsSnapshot = await db
@@ -219,7 +215,7 @@ console.log("⏰ AYARLI SAATLER:", userConfig.saatler);
       const trDate = new Date(nowTR);
       const bugunStr = nowTR.split(" ")[0];
 
-      const bildirimKey = `${gunFarki}_${simdikiSaat}_${bugunStr}`;
+    const bildirimKey = `${gunFarki}_${bugunStr}`;
 
       if (data.gonderilenHatirlatmalar?.includes(bildirimKey)) continue;
 
