@@ -97,7 +97,6 @@ const snapshot = await db
     yeniTarih.setFullYear(yeniTarih.getFullYear() + 1);
   }
 
-  // 🔥 KRİTİK DÜZELTME
   yeniTarih.setHours(12, 0, 0, 0);
 
   await db
@@ -150,10 +149,12 @@ async function otomatikOdemeKontrolu() {
 
     if (!configDoc.exists) continue;
 
-    const userConfig = configDoc.data();
+  const userConfig = configDoc.data();
 
-    if (!userConfig.aktifMi) continue;
+console.log("👤 USER:", uid);
+console.log("⚙️ CONFIG:", userConfig);
 
+if (!userConfig.aktifMi) continue;
     // 🔹 2. Türkiye saatini al
     const simdikiSaat = Number(
       new Intl.DateTimeFormat("tr-TR", {
@@ -162,6 +163,8 @@ async function otomatikOdemeKontrolu() {
         hour12: false,
       }).format(new Date())
     );
+     console.log("🕐 SIMDIKI SAAT:", simdikiSaat);
+console.log("⏰ AYARLI SAATLER:", userConfig.saatler);
 
     if (
       !Array.isArray(userConfig.saatler) ||
@@ -180,6 +183,7 @@ async function otomatikOdemeKontrolu() {
     for (const paymentDoc of paymentsSnapshot.docs) {
 
       const data = paymentDoc.data();
+       console.log("💳 ODEME BULUNDU:", paymentDoc.id, data.firmaAdi);
 
       if (data.durum === "odendi") continue;
       if (data.isTemplate) continue;
@@ -192,6 +196,7 @@ async function otomatikOdemeKontrolu() {
 
       const gunFarki = gunFarkiHesapla(sonOdemeRaw);
       if (gunFarki === null) continue;
+       console.log("📅 GUN FARKI:", gunFarki);
 
       // 🔹 4. Eşik üret
       let esikler = [];
@@ -203,6 +208,7 @@ async function otomatikOdemeKontrolu() {
       }
 
       esikler.push(-1, -3, -7);
+       console.log("🎯 ESIKLER:", esikler);
 
       if (!esikler.includes(gunFarki)) continue;
 
@@ -245,7 +251,7 @@ async function otomatikOdemeKontrolu() {
         mesajBaslik = "🚨 <b>GECİKMİŞ ÖDEME</b>";
         durumMetni = `⛔ Ödeme ${Math.abs(gunFarki)} gündür gecikmiş durumda.`;
       }
-
+console.log("📨 MESAJ GONDERILIYOR:", firmaAdi);
       await telegramMesajGonder(
         `${mesajBaslik}\n\n` +
           `🏢 <b>Firma:</b> ${firmaAdi}\n` +
