@@ -273,8 +273,8 @@ async function otomatikOdemeKontrolu() {
 ========================= */
 (async () => {
   try {
-    await periyotUretici();        // 🔁 ÖNCE ÜRET
-    await otomatikOdemeKontrolu(); // ⏰ SONRA KONTROL
+    await periyotUretici();        
+    await otomatikOdemeKontrolu(); 
   } catch (err) {
     console.error("❌ Cron çalışırken hata:", err);
   } finally {
