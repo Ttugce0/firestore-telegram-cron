@@ -170,16 +170,19 @@ async function otomatikOdemeKontrolu() {
     );
 
     const simdikiSaat = trNow.getHours();
+const simdikiDakika = trNow.getMinutes();
 
-    console.log("🕐 TR SAAT:", trNow.toLocaleString("tr-TR"));
-    console.log("🕐 SIMDIKI SAAT:", simdikiSaat);
-    console.log("⏰ AYARLI SAAT:", userConfig.saat);
+const hedefSaat = Number(userConfig.hour);
+const hedefDakika = Number(userConfig.minute);
 
-    /* SAAT EŞLEŞMESİ */
-    if (simdikiSaat !== Number(userConfig.saat)) {
-      console.log("⏭ Saat eşleşmedi, kullanıcı atlandı");
-      continue;
-    }
+const dakikaFarki = Math.abs(simdikiDakika - hedefDakika);
+console.log("🕐 SIMDI:", simdikiSaat + ":" + simdikiDakika);
+console.log("🎯 HEDEF:", hedefSaat + ":" + hedefDakika);
+console.log("📉 DAKIKA FARKI:", dakikaFarki);
+if (simdikiSaat !== hedefSaat || dakikaFarki > 2) {
+  console.log("⏭ Saat/dakika tolerans dışında");
+  continue;
+}
 
     const paymentsSnapshot = await db
       .collection("kullanicilar")
