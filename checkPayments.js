@@ -15,9 +15,9 @@ async function telegramMesajGonder(mesaj) {
       parse_mode: "HTML",
     });
 
-    console.log("✅ Telegram gönderildi");
+    console.log("✅ Telegram mesajı gönderildi");
   } catch (err) {
-    console.error("❌ Telegram hatası", err.message);
+    console.error("❌ Telegram hatası:", err.message);
   }
 }
 
@@ -47,70 +47,89 @@ async function odemeKontrol() {
 
     const uid = userDoc.id;
 
-    const paymentsSnapshot = await db
+    const firmalarSnapshot = await db
       .collection("users")
       .doc(uid)
-      .collection("odemeler")
-      .where("durum", "==", "odenmedi")
+      .collection("firmalar")
       .get();
 
-    for (const paymentDoc of paymentsSnapshot.docs) {
+    console.log("🏢 FIRMA SAYISI:", firmalarSnapshot.size);
 
-      const data = paymentDoc.data();
+    for (const firmaDoc of firmalarSnapshot.docs) {
 
-      if (!data.sonOdemeTarihi_ts) continue;
+      const firmaId = firmaDoc.id;
 
-      const gunFarki = gunFarkiHesapla(data.sonOdemeTarihi_ts);
+      const paymentsSnapshot = await db
+        .collection("users")
+        .doc(uid)
+        .collection("firmalar")
+        .doc(firmaId)
+        .collection("odemeler")
+        .where("durum", "==", "odenmedi")
+        .get();
 
-      if (![3,2,1,0,-1,-3,-7].includes(gunFarki)) continue;
+      console.log("💳 ODEME SAYISI:", paymentsSnapshot.size);
 
-      const firma = data.firmaAdi || "Bilinmeyen Firma";
-      const kategori = data.kategori || "-";
-      const tutar = data.tutar || 0;
-      const odenen = data.odenenTutar || 0;
-      const kalan = Math.max(tutar - odenen,0);
+      for (const paymentDoc of paymentsSnapshot.docs) {
 
-      const sonOdeme = data.sonOdemeTarihi_ts
-        .toDate()
-        .toLocaleDateString("tr-TR");
+        const data = paymentDoc.data();
 
-      let baslik = "";
-      let durum = "";
+        if (!data.sonOdemeTarihi_ts) continue;
 
-      if (gunFarki > 0) {
-        baslik = "📌 YAKLAŞAN ÖDEME";
-        durum = `⏳ Ödemeye ${gunFarki} gün kaldı`;
-      }
+        const gunFarki = gunFarkiHesapla(data.sonOdemeTarihi_ts);
 
-      if (gunFarki === 0) {
-        baslik = "⚠️ SON ÖDEME GÜNÜ";
-        durum = "Bugün son ödeme günü";
-      }
+        console.log("📅 GÜN FARKI:", gunFarki);
 
-      if (gunFarki < 0) {
-        baslik = "🚨 GECİKMİŞ ÖDEME";
-        durum = `${Math.abs(gunFarki)} gündür gecikmiş`;
-      }
+        if (![3,2,1,0,-1,-3,-7].includes(gunFarki)) continue;
 
-      const mesaj =
+        const firma = data.firmaAdi || "Bilinmeyen Firma";
+        const kategori = data.kategori || "-";
+        const tutar = data.tutar || 0;
+        const odenen = data.odenenTutar || 0;
+        const kalan = Math.max(tutar - odenen,0);
+
+        const sonOdeme = data.sonOdemeTarihi_ts
+          .toDate()
+          .toLocaleDateString("tr-TR");
+
+        let baslik = "";
+        let durum = "";
+
+        if (gunFarki > 0) {
+          baslik = "📌 <b>YAKLAŞAN ÖDEME</b>";
+          durum = `⏳ Ödemeye ${gunFarki} gün kaldı`;
+        }
+
+        if (gunFarki === 0) {
+          baslik = "⚠️ <b>SON ÖDEME GÜNÜ</b>";
+          durum = "📌 Bugün son ödeme günü";
+        }
+
+        if (gunFarki < 0) {
+          baslik = "🚨 <b>GECİKMİŞ ÖDEME</b>";
+          durum = `⛔ ${Math.abs(gunFarki)} gündür gecikmiş`;
+        }
+
+        const mesaj =
 `${baslik}
 
-🏢 Firma: ${firma}
-📂 Kategori: ${kategori}
+🏢 <b>Firma:</b> ${firma}
+📂 <b>Kategori:</b> ${kategori}
 
-💰 Toplam: ${tutar} ₺
-💳 Ödenen: ${odenen} ₺
-🧾 Kalan: ${kalan} ₺
+💰 <b>Toplam:</b> ${tutar} ₺
+💳 <b>Ödenen:</b> ${odenen} ₺
+🧾 <b>Kalan:</b> ${kalan} ₺
 
-📅 Son ödeme: ${sonOdeme}
+📅 <b>Son ödeme:</b> ${sonOdeme}
 
 ${durum}`;
 
-      await telegramMesajGonder(mesaj);
+        await telegramMesajGonder(mesaj);
 
-      gonderilen++;
+        gonderilen++;
 
-      console.log("📨 Bildirim gönderildi:", firma);
+        console.log("📨 Bildirim gönderildi:", firma);
+      }
     }
   }
 
@@ -121,7 +140,7 @@ ${durum}`;
   try {
     await odemeKontrol();
   } catch (err) {
-    console.error("❌ Cron hata:", err);
+    console.error("❌ Cron çalışırken hata:", err);
   } finally {
     process.exit(0);
   }
