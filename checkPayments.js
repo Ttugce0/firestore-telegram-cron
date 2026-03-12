@@ -1,24 +1,10 @@
 require("dotenv").config();
 const axios = require("axios");
-const db = require("./firebase");
 const admin = require("firebase-admin");
+const db = require("./firebase");
 
+console.log("🕒 CRON BAŞLADI");
 
-/* =========================
-   CRON BAŞLANGIÇ LOG
-========================= */
-console.log("🕒 CRON BASLADI");
-console.log("NOW (ISO):", new Date().toISOString());
-
-const trNowLog = new Date(
-  new Date().toLocaleString("en-US", { timeZone: "Europe/Istanbul" })
-);
-
-console.log("NOW (TR):", trNowLog.toLocaleString("tr-TR"));
-
-/* =========================
-   TELEGRAM MESAJ
-========================= */
 async function telegramMesajGonder(mesaj) {
   try {
     const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
@@ -29,271 +15,113 @@ async function telegramMesajGonder(mesaj) {
       parse_mode: "HTML",
     });
 
-    console.log("✅ Telegram mesajı gönderildi");
+    console.log("✅ Telegram gönderildi");
   } catch (err) {
-    console.error("❌ Telegram gönderim hatası");
-    if (err.response) console.error(err.response.data);
-    else console.error(err.message);
+    console.error("❌ Telegram hatası", err.message);
   }
 }
 
-/* =========================
-   GÜN FARKI (UTC / TR SAFE)
-========================= */
-function gunFarkiHesapla(tarih) {
-  let hedef = null;
+function gunFarkiHesapla(ts) {
 
-  if (tarih && typeof tarih === "object" && tarih.toDate) {
-    hedef = tarih.toDate();
-  } else if (typeof tarih === "string") {
-    if (/^\d{2}\.\d{2}\.\d{4}$/.test(tarih)) {
-      const [g, a, y] = tarih.split(".");
-      hedef = new Date(`${y}-${a}-${g}T12:00:00`);
-    } else {
-      hedef = new Date(tarih);
-    }
-  }
-
-  if (!hedef || isNaN(hedef.getTime())) return null;
+  const hedef = ts.toDate();
 
   const bugun = new Date();
-  bugun.setHours(12, 0, 0, 0);
-  hedef.setHours(12, 0, 0, 0);
+  bugun.setHours(12,0,0,0);
 
-  return Math.round((hedef - bugun) / (1000 * 60 * 60 * 24));
+  hedef.setHours(12,0,0,0);
+
+  const fark = (hedef - bugun) / (1000 * 60 * 60 * 24);
+
+  return Math.round(fark);
 }
 
-/* =========================
-   PERİYOT ÜRETİCİ
-========================= */
-async function periyotUretici() {
+async function odemeKontrol() {
 
-  console.log("🔁 PERİYOT ÜRETİMİ BAŞLADI");
+  const usersSnapshot = await db.collection("users").get();
 
-  const snapshot = await db
-    .collectionGroup("odemeler")
-    .where("isTemplate", "==", true)
-    .where("aktif", "==", true)
-    .get();
+  console.log("👥 USER SAYISI:", usersSnapshot.size);
 
-  const bugun = new Date();
-  bugun.setHours(0,0,0,0);
-
-  for (const doc of snapshot.docs) {
-
-    const data = doc.data();
-    const uid = doc.ref.parent.parent.id;
-
-    let sonUretilen = data.sonUretilenTarih?.toDate();
-    if (!sonUretilen) continue;
-
-    sonUretilen.setHours(0,0,0,0);
-
-    while (sonUretilen < bugun) {
-
-      let yeniTarih = new Date(sonUretilen);
-
-      if (data.periyot === "gunluk") {
-        yeniTarih.setDate(yeniTarih.getDate() + 1);
-      }
-      else if (data.periyot === "aylik") {
-        yeniTarih.setMonth(yeniTarih.getMonth() + 1);
-      }
-      else if (data.periyot === "yillik") {
-        yeniTarih.setFullYear(yeniTarih.getFullYear() + 1);
-      }
-
-      yeniTarih.setHours(12, 0, 0, 0);
-
-      await db
-        .collection("kullanicilar")
-        .doc(uid)
-        .collection("odemeler")
-        .add({
-          templateId: doc.id,
-          firmaId: data.firmaId,
-          firmaAdi: data.firmaAdi,
-          kategori: data.kategori,
-          tutar: data.tutar,
-          periyot: data.periyot,
-          aciklama: data.aciklama || "",
-          sonOdemeTarihi_ts: yeniTarih,
-          durum: "odenmedi",
-          odenenTutar: 0,
-          hatirlatmaAktif: true,
-          gonderilenHatirlatmalar: [],
-          olusturmaTarihi: new Date(),
-        });
-
-      sonUretilen = yeniTarih;
-    }
-
-    await doc.ref.update({
-      sonUretilenTarih: sonUretilen
-    });
-  }
-
-  console.log("✅ PERİYOT ÜRETİMİ BİTTİ");
-}
-
-/* =========================
-   OTOMATİK ÖDEME KONTROLÜ
-========================= */
-async function otomatikOdemeKontrolu() {
-
-  const usersSnapshot = await db.collection("kullanicilar").get();
-  let bildirimSayisi = 0;
+  let gonderilen = 0;
 
   for (const userDoc of usersSnapshot.docs) {
 
     const uid = userDoc.id;
 
-    const configDoc = await db
-      .collection("kullanicilar")
-      .doc(uid)
-      .collection("settings")
-      .doc("reminderConfig")
-      .get();
-
-    if (!configDoc.exists) continue;
-
-    const userConfig = configDoc.data();
-
-    console.log("👤 USER:", uid);
-    console.log("⚙️ CONFIG:", userConfig);
-
-    if (!userConfig.aktifMi) continue;
-
-    /* TR SAATİ AL */
-    const trNow = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "Europe/Istanbul" })
-    );
-
-    const simdikiSaat = trNow.getHours();
-const simdikiDakika = trNow.getMinutes();
-
-const hedefSaat = Number(userConfig.hour);
-const hedefDakika = Number(userConfig.minute);
-
-const dakikaFarki = Math.abs(simdikiDakika - hedefDakika);
-console.log("🕐 SIMDI:", simdikiSaat + ":" + simdikiDakika);
-console.log("🎯 HEDEF:", hedefSaat + ":" + hedefDakika);
-console.log("📉 DAKIKA FARKI:", dakikaFarki);
-if (simdikiSaat !== hedefSaat || dakikaFarki > 2) {
-  console.log("⏭ Saat/dakika tolerans dışında");
-  continue;
-}
-
     const paymentsSnapshot = await db
-      .collection("kullanicilar")
+      .collection("users")
       .doc(uid)
       .collection("odemeler")
+      .where("durum", "==", "odenmedi")
       .get();
 
     for (const paymentDoc of paymentsSnapshot.docs) {
 
       const data = paymentDoc.data();
-      console.log("💳 ODEME BULUNDU:", paymentDoc.id, data.firmaAdi);
 
-      if (data.durum === "odendi") continue;
-      if (data.isTemplate) continue;
-      if (!data.hatirlatmaAktif) continue;
+      if (!data.sonOdemeTarihi_ts) continue;
 
-      const sonOdemeRaw =
-        data.sonOdemeTarihi_ts ?? data.sonOdemeTarihi;
+      const gunFarki = gunFarkiHesapla(data.sonOdemeTarihi_ts);
 
-      if (!sonOdemeRaw) continue;
+      if (![3,2,1,0,-1,-3,-7].includes(gunFarki)) continue;
 
-      const gunFarki = gunFarkiHesapla(sonOdemeRaw);
-      if (gunFarki === null) continue;
+      const firma = data.firmaAdi || "Bilinmeyen Firma";
+      const kategori = data.kategori || "-";
+      const tutar = data.tutar || 0;
+      const odenen = data.odenenTutar || 0;
+      const kalan = Math.max(tutar - odenen,0);
 
-      console.log("📅 GUN FARKI:", gunFarki);
+      const sonOdeme = data.sonOdemeTarihi_ts
+        .toDate()
+        .toLocaleDateString("tr-TR");
 
-      let esikler = [];
-      const baslamaGun = userConfig.baslamaGun ?? 3;
-
-      for (let i = baslamaGun; i >= 0; i--) {
-        esikler.push(i);
-      }
-
-      esikler.push(-1, -3, -7);
-
-      console.log("🎯 ESIKLER:", esikler);
-
-      if (!esikler.includes(gunFarki)) continue;
-
-      const nowTR = new Date().toLocaleString("sv-SE", {
-        timeZone: "Europe/Istanbul",
-      });
-
-      const bugunStr = nowTR.split(" ")[0];
-      const bildirimKey = `${gunFarki}_${bugunStr}`;
-
-      if (data.gonderilenHatirlatmalar?.includes(bildirimKey)) continue;
-
-      const firmaAdi = data.firmaAdi || "Bilinmiyor";
-      const kategori = data.kategori || data.aciklama || "Bilinmiyor";
-
-      const toplamTutar = Number(data.tutar) || 0;
-      const odenenTutar = Number(data.odenenTutar) || 0;
-      const kalanTutar = Math.max(toplamTutar - odenenTutar, 0);
-
-      const sonOdeme = sonOdemeRaw.toDate
-        ? sonOdemeRaw.toDate().toLocaleDateString("tr-TR")
-        : sonOdemeRaw;
-
-      let mesajBaslik = "";
-      let durumMetni = "";
+      let baslik = "";
+      let durum = "";
 
       if (gunFarki > 0) {
-        mesajBaslik = "📌 <b>YAKLAŞAN ÖDEME</b>";
-        durumMetni = `⏳ Ödemeye ${gunFarki} gün kaldı.`;
+        baslik = "📌 YAKLAŞAN ÖDEME";
+        durum = `⏳ Ödemeye ${gunFarki} gün kaldı`;
       }
 
       if (gunFarki === 0) {
-        mesajBaslik = "⚠️ <b>SON ÖDEME GÜNÜ</b>";
-        durumMetni = "📌 Bugün son ödeme günü.";
+        baslik = "⚠️ SON ÖDEME GÜNÜ";
+        durum = "Bugün son ödeme günü";
       }
 
       if (gunFarki < 0) {
-        mesajBaslik = "🚨 <b>GECİKMİŞ ÖDEME</b>";
-        durumMetni = `⛔ Ödeme ${Math.abs(gunFarki)} gündür gecikmiş durumda.`;
+        baslik = "🚨 GECİKMİŞ ÖDEME";
+        durum = `${Math.abs(gunFarki)} gündür gecikmiş`;
       }
 
-      console.log("📨 MESAJ GONDERILIYOR:", firmaAdi);
+      const mesaj =
+`${baslik}
 
-      await telegramMesajGonder(
-        `${mesajBaslik}\n\n` +
-        `🏢 <b>Firma:</b> ${firmaAdi}\n` +
-        `📂 <b>Kategori:</b> ${kategori}\n` +
-        `💳 <b>Toplam:</b> ${toplamTutar} ₺\n` +
-        `💰 <b>Ödenen:</b> ${odenenTutar} ₺\n` +
-        `🧾 <b>Kalan:</b> ${kalanTutar} ₺\n` +
-        `📅 <b>Son Ödeme:</b> ${sonOdeme}\n` +
-        `${durumMetni}`
-      );
+🏢 Firma: ${firma}
+📂 Kategori: ${kategori}
 
-      await paymentDoc.ref.update({
-        gonderilenHatirlatmalar:
-          admin.firestore.FieldValue.arrayUnion(bildirimKey),
-      });
+💰 Toplam: ${tutar} ₺
+💳 Ödenen: ${odenen} ₺
+🧾 Kalan: ${kalan} ₺
 
-      bildirimSayisi++;
+📅 Son ödeme: ${sonOdeme}
+
+${durum}`;
+
+      await telegramMesajGonder(mesaj);
+
+      gonderilen++;
+
+      console.log("📨 Bildirim gönderildi:", firma);
     }
   }
 
-  console.log(`✅ CRON BITTI → ${bildirimSayisi} bildirim gönderildi`);
+  console.log("✅ CRON BİTTİ →", gonderilen, "bildirim gönderildi");
 }
 
-/* =========================
-   ÇALIŞTIR
-========================= */
 (async () => {
   try {
-    await periyotUretici();
-    await otomatikOdemeKontrolu();
+    await odemeKontrol();
   } catch (err) {
-    console.error("❌ Cron çalışırken hata:", err);
+    console.error("❌ Cron hata:", err);
   } finally {
     process.exit(0);
   }
