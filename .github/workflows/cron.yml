@@ -8,6 +8,7 @@ on:
 jobs:
   run-cron:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,6 +17,10 @@ jobs:
           node-version: 20
 
       - run: npm install
+
+      # Firebase JSON dosyasını secret'tan oluştur
+      - name: Create Firebase key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
 
       - run: node checkPayments.js
         env:
