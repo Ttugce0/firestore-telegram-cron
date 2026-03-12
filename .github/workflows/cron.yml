@@ -1,26 +1,23 @@
-name: Firestore Payment Check (Hourly)
+name: Payment Reminder
 
 on:
   schedule:
-    - cron: "0 * * * *"   # Her saat başı (00 dakika)
+    - cron: "0 7 * * *"   # 07:00 UTC = 10:00 TR
   workflow_dispatch:
 
 jobs:
   run-cron:
     runs-on: ubuntu-latest
-
-    env:
-      TZ: Europe/Istanbul
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      - run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
       - run: npm install
+
       - run: node checkPayments.js
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
