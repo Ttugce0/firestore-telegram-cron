@@ -34,24 +34,43 @@ function gunFarkiHesapla(ts) {
   return Math.round(fark);
 }
 
-function currentHour() {
+function saatEslesiyorMu(saatler) {
 
   const now = new Date();
 
-  // UTC → Türkiye (UTC+3)
+  // UTC → Türkiye
   now.setHours(now.getHours() + 3);
 
-  const saat = now.getHours().toString().padStart(2,"0");
+  const simdiDakika = now.getHours() * 60 + now.getMinutes();
 
-  return `${saat}:00`;
+  for (const saat of saatler) {
 
+    const [h,m] = saat.split(":").map(Number);
+
+    const hedefDakika = h * 60 + m;
+
+    const fark = Math.abs(simdiDakika - hedefDakika);
+
+    // ±10 dakika tolerans
+    if (fark <= 10) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 async function odemeKontrol() {
 
-  const saat = currentHour();
+  const now = new Date();
+  now.setHours(now.getHours() + 3);
 
-  console.log("🕓 CRON SAATİ:", saat);
+  const saatStr =
+    now.getHours().toString().padStart(2,"0") +
+    ":" +
+    now.getMinutes().toString().padStart(2,"0");
+
+  console.log("🕓 CRON SAATİ (TR):", saatStr);
 
   const usersSnapshot = await db.collection("users").get();
 
@@ -63,7 +82,6 @@ async function odemeKontrol() {
 
     const uid = userDoc.id;
 
-    // notification ayarını al
     const notifRef = await db
       .collection("users")
       .doc(uid)
@@ -83,8 +101,8 @@ async function odemeKontrol() {
       continue;
     }
 
-    if (!notif.saatler.includes(saat)) {
-      console.log("⏱ Saat eşleşmedi:", uid);
+    if (!saatEslesiyorMu(notif.saatler)) {
+      console.log("⏱ Saat aralığı eşleşmedi:", uid);
       continue;
     }
 
@@ -123,7 +141,6 @@ async function odemeKontrol() {
 
         console.log("📅 GÜN FARKI:", gunFarki);
 
-        // yeni kontrol: baslamaGun
         if (gunFarki > baslamaGun) continue;
 
         const firma = data.firmaAdi || "Bilinmeyen Firma";
