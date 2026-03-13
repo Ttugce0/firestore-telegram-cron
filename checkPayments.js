@@ -5,6 +5,12 @@ const db = require("./firebase");
 
 console.log("🕒 CRON BAŞLADI");
 
+function getTRTime() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Europe/Istanbul" })
+  );
+}
+
 async function telegramMesajGonder(mesaj) {
   try {
     const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
@@ -22,9 +28,10 @@ async function telegramMesajGonder(mesaj) {
 }
 
 function gunFarkiHesapla(ts) {
+
   const hedef = ts.toDate();
 
-  const bugun = new Date();
+  const bugun = getTRTime();
   bugun.setHours(12,0,0,0);
 
   hedef.setHours(12,0,0,0);
@@ -36,10 +43,7 @@ function gunFarkiHesapla(ts) {
 
 function saatEslesiyorMu(saatler) {
 
-  const now = new Date();
-
-  // UTC → Türkiye
-  now.setHours(now.getHours() + 3);
+  const now = getTRTime();
 
   const simdiDakika = now.getHours() * 60 + now.getMinutes();
 
@@ -51,8 +55,8 @@ function saatEslesiyorMu(saatler) {
 
     const fark = Math.abs(simdiDakika - hedefDakika);
 
-    // ±10 dakika tolerans
-    if (fark <= 10) {
+    // GitHub cron gecikmesine karşı tolerans
+    if (fark <= 15) {
       return true;
     }
   }
@@ -62,8 +66,7 @@ function saatEslesiyorMu(saatler) {
 
 async function odemeKontrol() {
 
-  const now = new Date();
-  now.setHours(now.getHours() + 3);
+  const now = getTRTime();
 
   const saatStr =
     now.getHours().toString().padStart(2,"0") +
