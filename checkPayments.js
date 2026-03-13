@@ -22,7 +22,6 @@ async function telegramMesajGonder(mesaj) {
 }
 
 function gunFarkiHesapla(ts) {
-
   const hedef = ts.toDate();
 
   const bugun = new Date();
@@ -35,7 +34,17 @@ function gunFarkiHesapla(ts) {
   return Math.round(fark);
 }
 
+function currentHour() {
+  const now = new Date();
+  const saat = now.getHours().toString().padStart(2,"0");
+  return `${saat}:00`;
+}
+
 async function odemeKontrol() {
+
+  const saat = currentHour();
+
+  console.log("🕓 CRON SAATİ:", saat);
 
   const usersSnapshot = await db.collection("users").get();
 
@@ -46,6 +55,33 @@ async function odemeKontrol() {
   for (const userDoc of usersSnapshot.docs) {
 
     const uid = userDoc.id;
+
+    // notification ayarını al
+    const notifRef = await db
+      .collection("users")
+      .doc(uid)
+      .collection("settings")
+      .doc("notification")
+      .get();
+
+    if (!notifRef.exists) {
+      console.log("⚠️ Notification ayarı yok:", uid);
+      continue;
+    }
+
+    const notif = notifRef.data();
+
+    if (!notif.aktif) {
+      console.log("⛔ Hatırlatma kapalı:", uid);
+      continue;
+    }
+
+    if (!notif.saatler.includes(saat)) {
+      console.log("⏱ Saat eşleşmedi:", uid);
+      continue;
+    }
+
+    const baslamaGun = notif.baslamaGun || 3;
 
     const firmalarSnapshot = await db
       .collection("users")
@@ -80,7 +116,8 @@ async function odemeKontrol() {
 
         console.log("📅 GÜN FARKI:", gunFarki);
 
-        if (![3,2,1,0,-1,-3,-7].includes(gunFarki)) continue;
+        // yeni kontrol: baslamaGun
+        if (gunFarki > baslamaGun) continue;
 
         const firma = data.firmaAdi || "Bilinmeyen Firma";
         const kategori = data.kategori || "-";
