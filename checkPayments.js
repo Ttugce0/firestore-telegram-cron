@@ -35,9 +35,16 @@ function gunFarkiHesapla(ts) {
 }
 
 function currentHour() {
+
   const now = new Date();
+
+  // UTC → Türkiye (UTC+3)
+  now.setHours(now.getHours() + 3);
+
   const saat = now.getHours().toString().padStart(2,"0");
+
   return `${saat}:00`;
+
 }
 
 async function odemeKontrol() {
