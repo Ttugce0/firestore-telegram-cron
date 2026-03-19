@@ -56,7 +56,7 @@ function saatEslesiyorMu(saatler) {
     const fark = Math.abs(simdiDakika - hedefDakika);
 
     // GitHub cron gecikmesine karşı tolerans
-    if (fark <= 4) {
+    if (fark <= 15) {
       return true;
     }
   }
