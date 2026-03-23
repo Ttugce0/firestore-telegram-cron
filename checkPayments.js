@@ -28,50 +28,39 @@ async function telegramMesajGonder(mesaj) {
 }
 
 function gunFarkiHesapla(ts) {
-
   const hedef = ts.toDate();
-
   const bugun = getTRTime();
-  bugun.setHours(12,0,0,0);
-
-  hedef.setHours(12,0,0,0);
-
+  bugun.setHours(12, 0, 0, 0);
+  hedef.setHours(12, 0, 0, 0);
   const fark = (hedef - bugun) / (1000 * 60 * 60 * 24);
-
   return Math.round(fark);
 }
 
-function saatEslesiyorMu(saatler) {
-
+// Boolean yerine eşleşen saati döndürür, yoksa null
+function eslesenSaatiBul(saatler) {
   const now = getTRTime();
-
   const simdiDakika = now.getHours() * 60 + now.getMinutes();
 
   for (const saat of saatler) {
-
-    const [h,m] = saat.split(":").map(Number);
-
+    const [h, m] = saat.split(":").map(Number);
     const hedefDakika = h * 60 + m;
 
-    const fark = Math.abs(simdiDakika - hedefDakika);
-
     // GitHub cron gecikmesine karşı tolerans
-    if (fark <= 15) {
-      return true;
+    if (Math.abs(simdiDakika - hedefDakika) <= 15) {
+      return saat; // "14:00" gibi döner
     }
   }
 
-  return false;
+  return null;
 }
 
 async function odemeKontrol() {
-
   const now = getTRTime();
 
   const saatStr =
-    now.getHours().toString().padStart(2,"0") +
+    now.getHours().toString().padStart(2, "0") +
     ":" +
-    now.getMinutes().toString().padStart(2,"0");
+    now.getMinutes().toString().padStart(2, "0");
 
   console.log("🕓 CRON SAATİ (TR):", saatStr);
 
@@ -82,7 +71,6 @@ async function odemeKontrol() {
   let gonderilen = 0;
 
   for (const userDoc of usersSnapshot.docs) {
-
     const uid = userDoc.id;
 
     const notifRef = await db
@@ -104,12 +92,18 @@ async function odemeKontrol() {
       continue;
     }
 
-    if (!saatEslesiyorMu(notif.saatler)) {
+    const eslesenSaat = eslesenSaatiBul(notif.saatler);
+
+    if (!eslesenSaat) {
       console.log("⏱ Saat aralığı eşleşmedi:", uid);
       continue;
     }
 
     const baslamaGun = notif.baslamaGun || 3;
+
+    // Bugünün tarihi + eşleşen saat → benzersiz bildirim key
+    const bugun = getTRTime().toISOString().slice(0, 10); // "2025-03-23"
+    const bildirimKey = `${bugun}_${eslesenSaat}`;        // "2025-03-23_14:00"
 
     const firmalarSnapshot = await db
       .collection("users")
@@ -120,7 +114,6 @@ async function odemeKontrol() {
     console.log("🏢 FIRMA SAYISI:", firmalarSnapshot.size);
 
     for (const firmaDoc of firmalarSnapshot.docs) {
-
       const firmaId = firmaDoc.id;
 
       const paymentsSnapshot = await db
@@ -135,7 +128,6 @@ async function odemeKontrol() {
       console.log("💳 ODEME SAYISI:", paymentsSnapshot.size);
 
       for (const paymentDoc of paymentsSnapshot.docs) {
-
         const data = paymentDoc.data();
 
         if (!data.sonOdemeTarihi_ts) continue;
@@ -146,11 +138,17 @@ async function odemeKontrol() {
 
         if (gunFarki > baslamaGun) continue;
 
+        // Bu saat diliminde bugün zaten gönderildiyse atla
+        if (data.bildirimGonderildi?.[bildirimKey]) {
+          console.log("⏭ Zaten gönderildi:", data.firmaAdi, bildirimKey);
+          continue;
+        }
+
         const firma = data.firmaAdi || "Bilinmeyen Firma";
         const kategori = data.kategori || "-";
         const tutar = data.tutar || 0;
         const odenen = data.odenenTutar || 0;
-        const kalan = Math.max(tutar - odenen,0);
+        const kalan = Math.max(tutar - odenen, 0);
 
         const sonOdeme = data.sonOdemeTarihi_ts
           .toDate()
@@ -189,6 +187,18 @@ async function odemeKontrol() {
 ${durum}`;
 
         await telegramMesajGonder(mesaj);
+
+        // Firestore'a gönderildi olarak işaretle
+        await db
+          .collection("users")
+          .doc(uid)
+          .collection("firmalar")
+          .doc(firmaId)
+          .collection("odemeler")
+          .doc(paymentDoc.id)
+          .update({
+            [`bildirimGonderildi.${bildirimKey}`]: true,
+          });
 
         gonderilen++;
 
