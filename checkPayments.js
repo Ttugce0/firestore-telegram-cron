@@ -36,7 +36,6 @@ function gunFarkiHesapla(ts) {
   return Math.round(fark);
 }
 
-// Boolean yerine eşleşen saati döndürür, yoksa null
 function eslesenSaatiBul(saatler) {
   const now = getTRTime();
   const simdiDakika = now.getHours() * 60 + now.getMinutes();
@@ -45,9 +44,9 @@ function eslesenSaatiBul(saatler) {
     const [h, m] = saat.split(":").map(Number);
     const hedefDakika = h * 60 + m;
 
-    // GitHub cron gecikmesine karşı tolerans
-    if (Math.abs(simdiDakika - hedefDakika) <= 15) {
-      return saat; // "14:00" gibi döner
+    // GitHub Actions gecikmesine karşı 30 dakika tolerans
+    if (Math.abs(simdiDakika - hedefDakika) <= 30) {
+      return saat;
     }
   }
 
@@ -101,7 +100,6 @@ async function odemeKontrol() {
 
     const baslamaGun = notif.baslamaGun || 3;
 
-    // Bugünün tarihi + eşleşen saat → benzersiz bildirim key
     const bugun = getTRTime().toISOString().slice(0, 10); // "2025-03-23"
     const bildirimKey = `${bugun}_${eslesenSaat}`;        // "2025-03-23_14:00"
 
@@ -138,7 +136,6 @@ async function odemeKontrol() {
 
         if (gunFarki > baslamaGun) continue;
 
-        // Bu saat diliminde bugün zaten gönderildiyse atla
         if (data.bildirimGonderildi?.[bildirimKey]) {
           console.log("⏭ Zaten gönderildi:", data.firmaAdi, bildirimKey);
           continue;
@@ -188,7 +185,6 @@ ${durum}`;
 
         await telegramMesajGonder(mesaj);
 
-        // Firestore'a gönderildi olarak işaretle
         await db
           .collection("users")
           .doc(uid)
