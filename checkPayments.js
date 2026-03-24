@@ -11,12 +11,12 @@ function getTRTime() {
   );
 }
 
-async function telegramMesajGonder(mesaj) {
+async function telegramMesajGonder(mesaj, token, chatId) {
   try {
-    const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
     await axios.post(url, {
-      chat_id: process.env.TELEGRAM_CHAT_ID,
+      chat_id: chatId,
       text: mesaj,
       parse_mode: "HTML",
     });
@@ -44,7 +44,6 @@ function eslesenSaatiBul(saatler) {
     const [h, m] = saat.split(":").map(Number);
     const hedefDakika = h * 60 + m;
 
-    // GitHub Actions gecikmesine karşı 30 dakika tolerans
     if (Math.abs(simdiDakika - hedefDakika) <= 30) {
       return saat;
     }
@@ -98,10 +97,30 @@ async function odemeKontrol() {
       continue;
     }
 
+    // Firestore'dan Telegram ayarlarını oku
+    const telegramSnap = await db
+      .collection("users")
+      .doc(uid)
+      .collection("settings")
+      .doc("telegram")
+      .get();
+
+    if (!telegramSnap.exists) {
+      console.log("⚠️ Telegram ayarı yok:", uid);
+      continue;
+    }
+
+    const { botToken, chatId } = telegramSnap.data();
+
+    if (!botToken || !chatId) {
+      console.log("⚠️ Telegram token veya chatId eksik:", uid);
+      continue;
+    }
+
     const baslamaGun = notif.baslamaGun || 3;
 
-    const bugun = getTRTime().toISOString().slice(0, 10); // "2025-03-23"
-    const bildirimKey = `${bugun}_${eslesenSaat}`;        // "2025-03-23_14:00"
+    const bugun = getTRTime().toISOString().slice(0, 10);
+    const bildirimKey = `${bugun}_${eslesenSaat}`;
 
     const firmalarSnapshot = await db
       .collection("users")
@@ -183,7 +202,7 @@ async function odemeKontrol() {
 
 ${durum}`;
 
-        await telegramMesajGonder(mesaj);
+        await telegramMesajGonder(mesaj, botToken, chatId);
 
         await db
           .collection("users")
