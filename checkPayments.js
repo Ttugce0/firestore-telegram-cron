@@ -97,7 +97,6 @@ async function odemeKontrol() {
       continue;
     }
 
-    // Firestore'dan Telegram ayarlarını oku
     const telegramSnap = await db
       .collection("users")
       .doc(uid)
@@ -154,6 +153,11 @@ async function odemeKontrol() {
         console.log("📅 GÜN FARKI:", gunFarki);
 
         if (gunFarki > baslamaGun) continue;
+
+        if (data.tutarGerekli) {
+          console.log("⏭ Tutar girilmemiş, atlanıyor:", data.firmaAdi);
+          continue;
+        }
 
         if (data.bildirimGonderildi?.[bildirimKey]) {
           console.log("⏭ Zaten gönderildi:", data.firmaAdi, bildirimKey);
