@@ -44,7 +44,11 @@ function eslesenSaatiBul(saatler) {
     const [h, m] = saat.split(":").map(Number);
     const hedefDakika = h * 60 + m;
 
-    if (Math.abs(simdiDakika - hedefDakika) <= 30) {
+    const fark = simdiDakika - hedefDakika;
+
+    // ✅ sadece geçmişe bak (erken tetikleme yok)
+    // ✅ maksimum 7 dakika gecikmeye izin ver
+    if (fark >= 0 && fark <= 7) {
       return saat;
     }
   }
