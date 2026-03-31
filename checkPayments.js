@@ -122,7 +122,12 @@ async function odemeKontrol() {
 
     const baslamaGun = notif.baslamaGun || 3;
 
-    const bugun = getTRTime().toISOString().slice(0, 10);
+    const now = getTRTime();
+
+const bugun =
+  now.getFullYear() + "-" +
+  String(now.getMonth() + 1).padStart(2, "0") + "-" +
+  String(now.getDate()).padStart(2, "0");
     const bildirimKey = `${bugun}_${eslesenSaat}`;
 
     const firmalarSnapshot = await db
