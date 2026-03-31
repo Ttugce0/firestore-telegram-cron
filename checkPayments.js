@@ -47,7 +47,7 @@ function eslesenSaatiBul(saatler) {
     const fark = simdiDakika - hedefDakika;
 
     // ✅ sadece geçmişe bak (erken tetikleme yok)
-    // ✅ maksimum 7 dakika gecikmeye izin ver
+    // ✅ maksimum 12 dakika gecikmeye izin ver
     if (fark >= 0 && fark <= 12) {
       return saat;
     }
