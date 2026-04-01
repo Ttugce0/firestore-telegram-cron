@@ -2,8 +2,20 @@ name: Payment Reminder
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "50 5 * * *"   # 08:50 TR
+    - cron: "55 5 * * *"   # 08:55 TR
+    - cron: "0 6 * * *"    # 09:00 TR
+    - cron: "5 6 * * *"    # 09:05 TR
+    - cron: "50 8 * * *"   # 11:50 TR
+    - cron: "55 8 * * *"   # 11:55 TR
+    - cron: "0 9 * * *"    # 12:00 TR
+    - cron: "5 9 * * *"    # 12:05 TR
+    - cron: "50 11 * * *"  # 14:50 TR
+    - cron: "55 11 * * *"  # 14:55 TR
+    - cron: "0 12 * * *"   # 15:00 TR
+    - cron: "5 12 * * *"   # 15:05 TR
   workflow_dispatch:
+
 
 jobs:
   run-cron:
